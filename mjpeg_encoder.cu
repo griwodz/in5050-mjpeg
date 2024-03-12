@@ -516,15 +516,15 @@ int main(int argc, char **argv)
     }
 
     /* Allocate data before read and encode loop */
-    yuv_t *image = malloc(sizeof(yuv_t));
-    image->Y = malloc(width*height);
-    image->U = malloc(width*height);
-    image->V = malloc(width*height);
+    yuv_t *image = (yuv_t*)malloc(sizeof(yuv_t));
+    image->Y = (uint8_t*)malloc(width*height);
+    image->U = (uint8_t*)malloc(width*height);
+    image->V = (uint8_t*)malloc(width*height);
 
-    dct_t *out = malloc(sizeof(dct_t));
-    out->Ydct = malloc(yph*ypw*(sizeof(*out->Ydct)));
-    out->Udct = malloc(uph*upw*(sizeof(*out->Udct)));
-    out->Vdct = malloc(vph*vpw*(sizeof(*out->Vdct)));
+    dct_t *out = (dct_t*)malloc(sizeof(dct_t));
+    out->Ydct = (int16_t*)malloc(yph*ypw*(sizeof(*out->Ydct)));
+    out->Udct = (int16_t*)malloc(uph*upw*(sizeof(*out->Udct)));
+    out->Vdct = (int16_t*)malloc(vph*vpw*(sizeof(*out->Vdct)));
 
     /* Encode input frames */
     int numframes = 0;;
