@@ -1,14 +1,14 @@
 CC = nvcc
-CFLAGS = -O0 -g \
-          -gencode arch=compute_30,code=sm_30 \
-	  -gencode arch=compute_30,code=compute_30
-CUFLAGS = -G -rdc=true \
-          -gencode arch=compute_30,code=sm_30 \
-	  -gencode arch=compute_30,code=compute_30
-	# RDC allow "separable compilation" - a CUDA kernel can use code and data from several .cu files
-LDFLAGS= -gencode arch=compute_30,code=sm_30 \
-          -gencode arch=compute_30,code=compute_30
-	  # -lnvToolsExt
+
+#
+# CC 8.7: Jetson Orin Nano, Jetson Orin NX, Jetson AGX Orin
+#
+ARCHFLAGS=-gencode arch=compute_87,code=sm_87 \
+	  -gencode arch=compute_87,code=compute_87
+
+CFLAGS = -O0 -g $(ARCHFLAGS)
+CUFLAGS= -G -rdc=true $(ARCHFLAGS) # RDC allow "separable compilation"
+LDFLAGS= $(ARCHFLAGS)
 
 all: mjpeg_gpu
 
@@ -24,5 +24,8 @@ clean:
 	rm -rf test.mjpeg
 
 foreman:
-	./mjpeg_gpu -w 352 -h 288 -f 10 -o test.mjpeg /mnt/sdcard/foreman.yuv
+	./mjpeg_gpu -w 352 -h 288 -f 100 -o test.mjpeg ../foreman.yuv
 
+play:
+	# -vo caca means colored ASCII art, -vo aa means black and white ASCII art
+	mplayer -vo caca test.mjpeg
