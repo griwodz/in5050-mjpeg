@@ -13,7 +13,7 @@
 
 static char *output_file;
 static char *input_file;
-static float cosuv[8][8][8][8];
+// static float cosuv[8][8][8][8];
 static FILE *outfile;
 
 static int limit_numframes = 0;

@@ -15,7 +15,7 @@ all: mjpeg_gpu
 %.o: %.cu
 	$(CC) $(CFLAGS) $(CUFLAGS) -c $<
 
-mjpeg_gpu: mjpeg_encoder.o dct_quantize.o tables.o cosv.o quant_table.o
+mjpeg_gpu: mjpeg_encoder.o dct_quantize.o tables.o
 	$(CC) $(CFLAGS) -o mjpeg_gpu $^ $(LDFLAGS)
 
 clean:
@@ -28,4 +28,4 @@ foreman:
 
 play:
 	# -vo caca means colored ASCII art, -vo aa means black and white ASCII art
-	mplayer -vo caca test.mjpeg
+	mplayer -vo aa test.mjpeg
