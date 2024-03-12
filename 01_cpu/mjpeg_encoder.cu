@@ -15,8 +15,8 @@ static FILE *outfile;
 
 static int limit_numframes = 0;
 
-static uint32_t width;
 static uint32_t height;
+static uint32_t width;
 static uint32_t yph;
 static uint32_t ypw;
 static uint32_t uph;
@@ -32,13 +32,13 @@ extern int optind;
 extern char *optarg;
 
 /* Read YUV frames */
-static yuv_t* read_yuv(FILE *file, yuv_t *image)
+static yuv_t* read_yuv(FILE *file, yuv_t* image)
 {
     size_t len = 0;
 
     /* Read Y' */
     len += fread(image->Y, 1, width*height, file);
-    if(ferror(file))
+    if( ferror(file) )
     {
         perror("ferror");
         exit(EXIT_FAILURE);
@@ -46,7 +46,7 @@ static yuv_t* read_yuv(FILE *file, yuv_t *image)
 
     /* Read U */
     len += fread(image->U, 1, (width*height)/4, file);
-    if(ferror(file))
+    if( ferror(file) )
     {
         perror("ferror");
         exit(EXIT_FAILURE);
@@ -54,13 +54,13 @@ static yuv_t* read_yuv(FILE *file, yuv_t *image)
 
     /* Read V */
     len += fread(image->V, 1, (width*height)/4, file);
-    if(ferror(file))
+    if( ferror(file) )
     {
         perror("ferror");
         exit(EXIT_FAILURE);
     }
 
-    if(len != width*height*1.5)
+    if( len != width*height*1.5 )
     {
         printf("Reached end of file.\n");
         return NULL;
@@ -118,7 +118,8 @@ static void put_byte(int byte)
 {
     int status = fputc(byte, outfile);
 
-    if (status == EOF) {
+    if( status == EOF )
+    {
         fprintf(stderr, "Error writing byte\n");
         exit(EXIT_FAILURE);
     }
@@ -128,7 +129,8 @@ static void put_bytes(const void* data, unsigned int len)
 {
     int n = fwrite(data, 1, len, outfile);
 
-    if(n != len) {
+    if( n != len )
+    {
         fprintf(stderr, "Error writing bytes\n");
         exit(-1);
     }
@@ -257,7 +259,8 @@ static void write_EOI()
 
 static inline uint8_t bit_width(int16_t i)
 {
-    return (uint8_t) (ceil((log(abs(i)+1))*ILOG2));
+    /* replacing ILOG2 with M_LOG2E from math.h */
+    return (uint8_t) (ceil((log(abs(i)+1))*M_LOG2E));
 }
 
 /**
@@ -276,10 +279,11 @@ static void put_bits(int16_t bits, uint8_t n)
     bit_buffer |= bits & ((1 << n) - 1);
     bit_buffer_width += n;
 
-    while(bit_buffer_width >= 8) {
+    while(bit_buffer_width >= 8)
+    {
         uint8_t c = (uint8_t)(bit_buffer >> (bit_buffer_width - 8));
         put_byte(c);
-        if(c == 0xff)
+        if( c == 0xff )
             put_byte(0);
 
         bit_buffer_width -= 8;
@@ -291,10 +295,11 @@ static void put_bits(int16_t bits, uint8_t n)
  */
 static void flush()
 {
-    if(bit_buffer > 0) {
+    if( bit_buffer > 0 )
+    {
         uint8_t c = bit_buffer << (8 - bit_buffer_width);
         put_byte(c);
-        if(c == 0xff)
+        if( c == 0xff )
             put_byte(0);
     }
 
@@ -302,9 +307,9 @@ static void flush()
     bit_buffer_width = 0;
 }
 
-static void write_block(int16_t *in_data, uint32_t width, uint32_t height,
-        uint32_t uoffset, uint32_t voffset, int16_t *prev_DC,
-        int32_t cc)
+static void write_block( int16_t *in_data, uint32_t width, uint32_t height,
+                         uint32_t uoffset, uint32_t voffset, int16_t* prev_DC,
+                         int32_t cc)
 {
     uint32_t zigzag, i, j;
 
@@ -312,7 +317,7 @@ static void write_block(int16_t *in_data, uint32_t width, uint32_t height,
     int32_t num_ac = 0;
 
     /* ZigZag */
-    for(zigzag = 0; zigzag < 64; zigzag++)
+    for( zigzag = 0; zigzag < 64; zigzag++ )
     {
         uint8_t u = zigzag_U[zigzag];
         uint8_t v = zigzag_V[zigzag];
@@ -324,22 +329,22 @@ static void write_block(int16_t *in_data, uint32_t width, uint32_t height,
     *prev_DC = block[0];
     uint8_t size = bit_width(dc);
     put_bits(DCVLC[cc][size],DCVLC_Size[cc][size]);
-    if(dc < 0)
+    if( dc < 0 )
         dc = dc - 1;
 
     put_bits(dc, size);
 
     /* find the last nonzero entry of the ac-coefficients */
-    for(j = 64; j > 1 && !block[j-1]; j--)
+    for( j = 64; j > 1 && !block[j-1]; j-- )
         ;
 
     /* Put the nonzero ac-coefficients */
-    for(i = 1; i < j; i++)
+    for( i = 1; i < j; i++ )
     {
         int16_t ac = block[i];
-        if(ac == 0)
+        if( ac == 0 )
         {
-            if(++num_ac == 16)
+            if( ++num_ac == 16 )
             {
                 put_bits(ACVLC[cc][15][0], ACVLC_Size[cc][15][0]);
                 num_ac = 0;
@@ -350,7 +355,7 @@ static void write_block(int16_t *in_data, uint32_t width, uint32_t height,
             uint8_t size = bit_width(ac);
             put_bits(ACVLC[cc][num_ac][size], ACVLC_Size[cc][num_ac][size]);
 
-            if(ac < 0)
+            if( ac < 0 )
                 --ac;
             put_bits(ac, size);
             num_ac = 0;
@@ -358,21 +363,21 @@ static void write_block(int16_t *in_data, uint32_t width, uint32_t height,
     }
 
     /* Put end of block marker */
-    if(j < 64)
+    if( j < 64 )
         put_bits(ACVLC[cc][0][0], ACVLC_Size[cc][0][0]);
 }
 
-static void write_interleaved_data_MCU(int16_t *dct, uint32_t wi, uint32_t he,
-        uint32_t h, uint32_t v, uint32_t x,
-        uint32_t y, int16_t *prev_DC, int32_t cc)
+static void write_interleaved_data_MCU( int16_t *dct, uint32_t wi, uint32_t he,
+                                        uint32_t h, uint32_t v, uint32_t x,
+                                        uint32_t y, int16_t *prev_DC, int32_t cc)
 {
     uint32_t i, j, ii, jj;
-    for(j = y*v*8; j < (y+1)*v*8; j += 8)
+    for( j = y*v*8; j < (y+1)*v*8; j += 8 )
     {
         jj = he-8;
         jj = MIN(j, jj);
 
-        for(i = x*h*8; i < (x+1)*h*8; i += 8)
+        for( i = x*h*8; i < (x+1)*h*8; i += 8 )
         {
             ii = wi-8;
             ii = MIN(i, ii);
@@ -397,9 +402,9 @@ static void write_interleaved_data(dct_t *out)
     uint32_t vblocks = (uint32_t) (ceil(yph/(float)(8.0f*YY)));
 
     /* Write the MCU's interleaved */
-    for(v = 0; v < vblocks; ++v)
+    for( v = 0; v < vblocks; ++v )
     {
-        for(u = 0; u < ublocks; ++u)
+        for( u = 0; u < ublocks; ++u )
         {
             write_interleaved_data_MCU(out->Ydct, ypw, yph, YX, YY, u, v, &prev_DC[0], yhtbl);
             write_interleaved_data_MCU(out->Udct, upw, uph, UX, UY, u, v, &prev_DC[1], uhtbl);
@@ -410,7 +415,7 @@ static void write_interleaved_data(dct_t *out)
     flush();
 }
 
-static void encode(yuv_t *image, dct_t *out)
+static void encode(yuv_t *image, dct_t* out)
 {
     /* DCT and Quantization */
     dct_quantize(image->Y, width, height, out->Ydct, ypw, yph, yquanttbl);
@@ -418,7 +423,6 @@ static void encode(yuv_t *image, dct_t *out)
     dct_quantize(image->V, (width*VX/YX), (height*VY/YY), out->Vdct, vpw, vph, vquanttbl);
 
     /* Write headers */
-
     /* Start Of Image */
     write_SOI();
     /* Define Quantization Table(s) */
@@ -452,7 +456,7 @@ int main(int argc, char **argv)
 {
     int c;
 
-    if(argc == 1)
+    if( argc == 1 )
     {
         print_help();
         exit(EXIT_FAILURE);
@@ -480,15 +484,14 @@ int main(int argc, char **argv)
         }
     }
 
-
-    if(optind >= argc)
+    if( optind >= argc )
     {
         fprintf(stderr, "Error getting program options, try --help.\n");
         exit(EXIT_FAILURE);
     }
 
     outfile = fopen(output_file, "wb");
-    if(outfile == NULL)
+    if( outfile == NULL )
     {
         perror("fopen");
         exit(EXIT_FAILURE);
@@ -505,11 +508,13 @@ int main(int argc, char **argv)
     input_file = argv[optind];
 
     if (limit_numframes)
+    {
         printf("Limited to %d frames.\n", limit_numframes);
+    }
 
     FILE *infile = fopen(input_file, "rb");
 
-    if(infile == NULL)
+    if( infile == NULL )
     {
         perror("fopen");
         exit(EXIT_FAILURE);
@@ -527,8 +532,8 @@ int main(int argc, char **argv)
     out->Vdct = (int16_t*)malloc(vph*vpw*(sizeof(*out->Vdct)));
 
     /* Encode input frames */
-    int numframes = 0;;
-    while(!feof(infile))
+    int numframes = 0;
+    while( !feof(infile) )
     {
         image = read_yuv(infile, image);
 
@@ -544,8 +549,7 @@ int main(int argc, char **argv)
         printf("Done!\n");
 
         ++numframes;
-        if (limit_numframes && numframes >= limit_numframes)
-            break;
+        if( limit_numframes && numframes >= limit_numframes ) break;
     }
 
     /* Free both image read from file and endoded image */
@@ -559,8 +563,8 @@ int main(int argc, char **argv)
     free(out->Vdct);
     free(out);
 
-    fclose(outfile);
-    fclose(infile);
+    fclose( outfile );
+    fclose( infile );
 
-    exit(EXIT_SUCCESS);
+    exit( EXIT_SUCCESS );
 }

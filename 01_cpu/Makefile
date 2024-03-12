@@ -14,4 +14,9 @@ clean:
 	rm -f *.o mjpeg_encoder
 
 foreman:
-	./mjpeg_encoder -w 352 -h 288 -f 10 -o test.mjpeg ../foreman.yuv
+	./mjpeg_encoder -w 352 -h 288 -f 100 -o test.mjpeg ../foreman.yuv
+
+play:
+	# -vo caca means colored ASCII art, -vo aa means black and white ASCII art
+	mplayer -vo aa test.mjpeg
+
