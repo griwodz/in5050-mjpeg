@@ -14,6 +14,42 @@
 static uint32_t bit_buffer = 0;
 static uint32_t bit_buffer_width = 0;
 
+static uint8_t yquanttbl[64] __attribute__((aligned(16))) =
+{
+  16, 11, 12, 14, 12, 10, 16, 14,
+  13, 14, 18, 17, 16, 19, 24, 40,
+  26, 24, 22, 22, 24, 49, 35, 37,
+  29, 40, 58, 51, 61, 30, 57, 51,
+  56, 55, 64, 72, 92, 78, 64, 68,
+  87, 69, 55, 56, 80, 109, 81, 87,
+  95, 98, 103, 104, 103, 62, 77, 113,
+  121, 112, 100, 120, 92, 101, 103, 99
+};
+
+static uint8_t uquanttbl[64] __attribute__((aligned(16))) =
+{
+  17, 18, 18, 24, 21, 24, 47, 26,
+  26, 47, 99, 66, 56, 66, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99
+};
+
+static uint8_t vquanttbl[64] __attribute__((aligned(16))) =
+{
+  17, 18, 18, 24, 21, 24, 47, 26,
+  26, 47, 99, 66, 56, 66, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99
+};
+
 static void put_byte(int byte)
 {
     int status = fputc(byte, outfile);
@@ -221,7 +257,11 @@ static void write_block( int16_t *in_data, uint32_t width, uint32_t height,
     {
         uint8_t u = zigzag_U[zigzag];
         uint8_t v = zigzag_V[zigzag];
-        block[zigzag] = in_data[(voffset+v)*width+(uoffset+u)];
+
+        // block[zigzag] = in_data[(voffset+v)*width+(uoffset+u)];
+	int offset = (voffset+v)*width+(uoffset+u);
+       	int16_t data = in_data[offset];
+        block[zigzag] = data;
     }
 
     /* Calculate DC component, and write to stream */

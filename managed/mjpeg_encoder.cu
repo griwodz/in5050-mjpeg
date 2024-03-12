@@ -30,6 +30,42 @@ uint32_t vpw;
 extern int optind;
 extern char *optarg;
 
+__device__ __constant__ static uint8_t yquanttbl[64] __attribute__((aligned(16))) =
+{
+  16, 11, 12, 14, 12, 10, 16, 14,
+  13, 14, 18, 17, 16, 19, 24, 40,
+  26, 24, 22, 22, 24, 49, 35, 37,
+  29, 40, 58, 51, 61, 30, 57, 51,
+  56, 55, 64, 72, 92, 78, 64, 68,
+  87, 69, 55, 56, 80, 109, 81, 87,
+  95, 98, 103, 104, 103, 62, 77, 113,
+  121, 112, 100, 120, 92, 101, 103, 99
+};
+
+__device__ __constant__ static uint8_t uquanttbl[64] __attribute__((aligned(16))) =
+{
+  17, 18, 18, 24, 21, 24, 47, 26,
+  26, 47, 99, 66, 56, 66, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99
+};
+
+__device__ __constant__ static uint8_t vquanttbl[64] __attribute__((aligned(16))) =
+{
+  17, 18, 18, 24, 21, 24, 47, 26,
+  26, 47, 99, 66, 56, 66, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99
+};
+
 void fatality_test( cudaError_t err, const char* info )
 {
     if( err == cudaSuccess ) return;
@@ -122,12 +158,67 @@ static void dct_quantize(uint8_t *in_data, uint32_t width, uint32_t height,
     }
 }
 
+__global__ void gpu_dct_quantize(uint8_t *in_data, uint32_t width, uint32_t height,
+                                 int16_t *out_data, uint32_t padwidth,
+                                 uint32_t padheight, uint8_t *quantization)
+{
+    int x = blockIdx.x * 8;
+    int y = blockIdx.y * 8;
+
+    int u,v,j,i;
+
+    /* Perform the DCT and quantization */
+    // for(y = 0; y < height; y += 8)
+    // {
+        int jj = height - y;
+        jj = MIN(jj, 8); // For the border-pixels, we might have a part of an 8x8 block
+
+        // for(x = 0; x < width; x += 8)
+        // {
+            int ii = width - x;
+            ii = MIN(ii, 8); // For the border-pixels, we might have a part of an 8x8 block
+
+            //Loop through all elements of the block
+            for(u = 0; u < 8; ++u)
+            {
+                for(v = 0; v < 8; ++v)
+                {
+                    /* Compute the DCT */
+                    float dct = 0;
+                    for(j = 0; j < jj; ++j)
+                        for(i = 0; i < ii; ++i)
+                        {
+                            float coeff = in_data[(y+j)*width+(x+i)] - 128.0f;
+                            dct += coeff * (float) (cos((2*i+1)*u*PI/16.0f) * cos((2*j+1)*v*PI/16.0f));
+                        }
+
+                    float a1 = !u ? ISQRT2 : 1.0f;
+                    float a2 = !v ? ISQRT2 : 1.0f;
+
+                    /* Scale according to normalizing function */
+                    dct *= a1*a2/4.0f;
+
+                    /* Quantize */
+                    out_data[(y+v)*width+(x+u)] = (int16_t)(floor(0.5f + dct / (float)(quantization[v*8+u])));
+                }
+            }
+        // }
+    // }
+}
+
 static void encode(yuv_t *image, dct_t* out)
 {
     /* DCT and Quantization */
-    dct_quantize(image->Y, width, height, out->Ydct, ypw, yph, yquanttbl);
-    dct_quantize(image->U, (width*UX/YX), (height*UY/YY), out->Udct, upw, uph, uquanttbl);
-    dct_quantize(image->V, (width*VX/YX), (height*VY/YY), out->Vdct, vpw, vph, vquanttbl);
+    // dct_quantize(image->Y, width, height, out->Ydct, ypw, yph, yquanttbl);
+    // dct_quantize(image->U, (width*UX/YX), (height*UY/YY), out->Udct, upw, uph, uquanttbl);
+    // dct_quantize(image->V, (width*VX/YX), (height*VY/YY), out->Vdct, vpw, vph, vquanttbl);
+
+    dim3 blocks( width/8, height/8, 1 );
+    gpu_dct_quantize<<<blocks,1>>>(image->Y, width, height, out->Ydct, ypw, yph, yquanttbl);
+    gpu_dct_quantize<<<blocks,1>>>(image->U, (width*UX/YX), (height*UY/YY), out->Udct, upw, uph, uquanttbl);
+    gpu_dct_quantize<<<blocks,1>>>(image->V, (width*VX/YX), (height*VY/YY), out->Vdct, vpw, vph, vquanttbl);
+
+    cudaDeviceSynchronize();
 
     /* Write headers */
     /* Start Of Image */
@@ -234,14 +325,14 @@ int main(int argc, char **argv)
     image->V = (uint8_t*)malloc(width*height);
 
     cudaError_t err;
-    err = cudaMallocManaged( &image->Y, width*height ); fatality_test( err, "Failed to allocate image plane." );
-    err = cudaMallocManaged( &image->U, width*height ); fatality_test( err, "Failed to allocate image plane." );
-    err = cudaMallocManaged( &image->V, width*height ); fatality_test( err, "Failed to allocate image plane." );
+    err = cudaMalloc( &image->Y, width*height ); fatality_test( err, "Failed to allocate image plane." );
+    err = cudaMalloc( &image->U, width*height ); fatality_test( err, "Failed to allocate image plane." );
+    err = cudaMalloc( &image->V, width*height ); fatality_test( err, "Failed to allocate image plane." );
 
     dct_t *out = (dct_t*)malloc(sizeof(dct_t));
-    err = cudaMallocManaged( &out->Ydct, yph*ypw*(sizeof(*out->Ydct)) ); fatality_test( err, "Failed to allocate dct plane." );
-    err = cudaMallocManaged( &out->Udct, uph*upw*(sizeof(*out->Udct)) ); fatality_test( err, "Failed to allocate dct plane." );
-    err = cudaMallocManaged( &out->Vdct, vph*vpw*(sizeof(*out->Vdct)) ); fatality_test( err, "Failed to allocate dct plane." );
+    err = cudaMalloc( &out->Ydct, yph*ypw*(sizeof(*out->Ydct)) ); fatality_test( err, "Failed to allocate dct plane." );
+    err = cudaMalloc( &out->Udct, uph*upw*(sizeof(*out->Udct)) ); fatality_test( err, "Failed to allocate dct plane." );
+    err = cudaMalloc( &out->Vdct, vph*vpw*(sizeof(*out->Vdct)) ); fatality_test( err, "Failed to allocate dct plane." );
 
     /* Encode input frames */
     int numframes = 0;

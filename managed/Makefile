@@ -1,4 +1,4 @@
-CFLAGS = -O3 -lm
+CFLAGS = -O3 -g
 
 TARGET = mjpeg_encoder
 
