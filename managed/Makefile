@@ -4,7 +4,7 @@ TARGET = mjpeg_encoder
 
 all: $(TARGET)
 
-mjpeg_encoder: mjpeg_encoder.o
+mjpeg_encoder: mjpeg_encoder.o diskwrite.o
 	nvcc $(CFLAGS) -o $@ $^
 
 %.o: %.cu
