@@ -21,6 +21,16 @@
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
+extern FILE*    outfile;
+extern uint32_t height;
+extern uint32_t width;
+extern uint32_t yph;
+extern uint32_t ypw;
+extern uint32_t uph;
+extern uint32_t upw;
+extern uint32_t vph;
+extern uint32_t vpw;
+
 struct yuv
 {
   uint8_t *Y;
