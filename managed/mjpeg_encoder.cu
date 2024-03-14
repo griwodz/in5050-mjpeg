@@ -325,14 +325,14 @@ int main(int argc, char **argv)
     image->V = (uint8_t*)malloc(width*height);
 
     cudaError_t err;
-    err = cudaMalloc( &image->Y, width*height ); fatality_test( err, "Failed to allocate image plane." );
-    err = cudaMalloc( &image->U, width*height ); fatality_test( err, "Failed to allocate image plane." );
-    err = cudaMalloc( &image->V, width*height ); fatality_test( err, "Failed to allocate image plane." );
+    err = cudaMallocManaged( &image->Y, width*height ); fatality_test( err, "Failed to allocate image plane." );
+    err = cudaMallocManaged( &image->U, width*height ); fatality_test( err, "Failed to allocate image plane." );
+    err = cudaMallocManaged( &image->V, width*height ); fatality_test( err, "Failed to allocate image plane." );
 
     dct_t *out = (dct_t*)malloc(sizeof(dct_t));
-    err = cudaMalloc( &out->Ydct, yph*ypw*(sizeof(*out->Ydct)) ); fatality_test( err, "Failed to allocate dct plane." );
-    err = cudaMalloc( &out->Udct, uph*upw*(sizeof(*out->Udct)) ); fatality_test( err, "Failed to allocate dct plane." );
-    err = cudaMalloc( &out->Vdct, vph*vpw*(sizeof(*out->Vdct)) ); fatality_test( err, "Failed to allocate dct plane." );
+    err = cudaMallocManaged( &out->Ydct, yph*ypw*(sizeof(*out->Ydct)) ); fatality_test( err, "Failed to allocate dct plane." );
+    err = cudaMallocManaged( &out->Udct, uph*upw*(sizeof(*out->Udct)) ); fatality_test( err, "Failed to allocate dct plane." );
+    err = cudaMallocManaged( &out->Vdct, vph*vpw*(sizeof(*out->Vdct)) ); fatality_test( err, "Failed to allocate dct plane." );
 
     /* Encode input frames */
     int numframes = 0;
