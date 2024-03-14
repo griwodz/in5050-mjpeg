@@ -1,4 +1,4 @@
-CFLAGS = -O3 -g
+CFLAGS = --std=c++17 -O3 -g
 
 TARGET = mjpeg_encoder
 

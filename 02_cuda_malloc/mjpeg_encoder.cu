@@ -230,5 +230,6 @@ int main(int argc, char **argv)
     fclose(outfile);
     fclose(infile);
 
-    exit (EXIT_SUCCESS);
+    // exit (EXIT_SUCCESS);
+    return 0;
 }
