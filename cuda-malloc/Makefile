@@ -5,7 +5,7 @@ CUFLAGS = $(CFLAGS) -G $(ARCH) -rdc=true
 
 all: mjpeg_gpu
 
-mjpeg_gpu: mjpeg_encoder.o dct_quantize.o tables.o cosv.o quant_table.o
+mjpeg_gpu: mjpeg_encoder.o dct_quantize.o tables.o cosv.o quant_table.o diskwrite.o
 	$(CC) $(CUFLAGS) -o $@ $^
 
 %.o: %.c
