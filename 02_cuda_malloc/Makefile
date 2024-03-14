@@ -27,9 +27,11 @@ test.mjpeg: mjpeg_gpu
 	# ./mjpeg_gpu -w 352 -h 288 -f 10 -o test.mjpeg foreman.yuv
 	./mjpeg_gpu -w 352 -h 288 -o test.mjpeg ../foreman.yuv
 
-profile:
-	# sudo /usr/local/cuda-12.2/bin/ncu --target-processes all -f -o Report ./mjpeg_gpu -w 352 -h 288 -f 20 -o test.mjpeg ../foreman.yuv
-	sudo /usr/local/cuda-12.2/bin/ncu --profile 0 -f -o Report ./mjpeg_gpu -w 352 -h 288 -f 20 -o test.mjpeg ../foreman.yuv
+profile: mjpeg_gpu
+	sudo /usr/local/cuda-12.2/bin/ncu --target-processes all -f -o Report ./mjpeg_gpu -w 352 -h 288 -f 20 -o test.mjpeg ../foreman.yuv
+
+debug: mjpeg_gpu
+	sudo /usr/local/cuda-11.4/bin//cuda-gdb --args ./mjpeg_gpu -w 352 -h 288 -f 20 -o test.mjpeg ../foreman.yuv
 
 play: test.mjpeg
 	# -vo caca means colored ASCII art, -vo aa means black and white ASCII art
