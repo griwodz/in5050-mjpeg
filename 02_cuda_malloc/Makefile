@@ -1,5 +1,6 @@
 CC = nvcc
-ARCH=
+ARCH=-gencode arch=compute_72,code=sm_72 \
+     -gencode arch=compute_72,code=compute_72
 CFLAGS = -O0 -g
 CUFLAGS = $(CFLAGS) -G $(ARCH) -rdc=true
 
