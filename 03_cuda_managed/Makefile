@@ -2,7 +2,7 @@ CC = nvcc
 ARCH=-gencode arch=compute_72,code=sm_72 \
      -gencode arch=compute_72,code=compute_72
 CFLAGS = --std=c++17 -O0 -g
-CUFLAGS = $(CFLAGS) -G $(ARCH) -rdc=true
+CUFLAGS = $(CFLAGS) -G $(ARCH) -rdc=true -Xptxas --warn-on-spills
 
 all: mjpeg_gpu
 

@@ -3,7 +3,7 @@ ARCH=-gencode arch=compute_72,code=sm_72 \
 CFLAGS = --std=c++17 -O0 -g $(ARCH) \
          -Wno-deprecated-gpu-targets \
 	 -Wreorder \
-	 -Xcompiler "-march=armv8-a"
+	 -Xcompiler "-march=armv8-a" -Xptxas --warn-on-spills
 
 TARGET = prop
 

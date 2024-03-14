@@ -1,11 +1,12 @@
 CC = nvcc
-ARCH=
-CFLAGS = -O0 -g
-CUFLAGS = $(CFLAGS) -G $(ARCH) -rdc=true
+ARCH=-gencode arch=compute_72,code=sm_72 \
+     -gencode arch=compute_72,code=compute_72
+CFLAGS = --std=c++17 -O0 -g
+CUFLAGS = $(CFLAGS) -G $(ARCH) -rdc=true -Xptxas --warn-on-spills
 
 all: mjpeg_gpu
 
-mjpeg_gpu: mjpeg_encoder.o dct_quantize.o tables.o cosv.o quant_table.o
+mjpeg_gpu: mjpeg_encoder.o dct_quantize.o tables.o cosv.o quant_table.o diskwrite.o
 	$(CC) $(CUFLAGS) -o $@ $^
 
 %.o: %.c
@@ -20,7 +21,7 @@ clean:
 	rm -rf test.mjpeg
 
 foreman: test.mjpeg
-
+       
 test.mjpeg: mjpeg_gpu
 	# ./mjpeg_gpu -w 352 -h 288 -f 10 -o test.mjpeg foreman.yuv
 	./mjpeg_gpu -w 352 -h 288 -o test.mjpeg ../foreman.yuv
