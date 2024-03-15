@@ -87,6 +87,16 @@ __host__ void gpu_init()
   cudaMallocManaged((void **) &Ydst, y_out_size);
   cudaMallocManaged((void **) &Udst, uv_out_size);
   cudaMallocManaged((void **) &Vdst, uv_out_size);
+
+  for( int i=0; i<3; i++ )
+  {
+    cudaError_t err = cudaStreamCreate( &stream[i] );
+    if( err != cudaSuccess )
+    {
+        std::cerr << "Failed to create CUDA stream " << i << " - terminating" << std::endl;
+        exit( EXIT_FAILURE );
+    }
+  }
 }
 
 
@@ -137,28 +147,12 @@ __host__ void gpu_dct_quantize(yuv_t *image, dct_t *out)
   memcpy(out->Vdct, Vdst, uv_out_size);
 }
 
-void makeStreams()
-{
-    for( int i=0; i<3; i++ )
-    {
-        cudaError_t err = cudaStreamCreate( &stream[i] );
-        if( err != cudaSuccess )
-        {
-            std::cerr << "Failed to create CUDA stream " << i << " - terminating" << std::endl;
-            exit( EXIT_FAILURE );
-        }
-    }
-}
-
-void deleteStreams()
-{
-    for( int i=0; i<3; i++ )
-        cudaStreamDestroy( stream[i] );
-}
-
 /* Clean up! ;) */
 __host__ void gpu_cleanup()
 {
+  for( int i=0; i<3; i++ )
+    cudaStreamDestroy( stream[i] );
+
   cudaFree(Yinn);
   cudaFree(Uinn);
   cudaFree(Vinn);
