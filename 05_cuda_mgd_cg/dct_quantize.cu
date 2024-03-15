@@ -1,4 +1,5 @@
 #include <cuda.h>
+#include <cooperative_groups.h> // NEW
 #include <stdio.h>
 #include <math.h>
 
@@ -21,16 +22,20 @@ uint8_t *Yinn;
 uint8_t *Uinn;
 uint8_t *Vinn;
 
+/* https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#cooperative-groups */
+using namespace cooperative_groups;
 
 /* The DCT is performed on the device. Use the DCT algorithm from precode.
  * ONE thread will work on ONE pixel.
  */
 __global__ void dct_quantize( uint8_t *inn_data, int16_t *out_data, uint32_t padwidth, uint16_t width, uint32_t quant_offset )
 {
+    thread_block threads = this_thread_block(); // NEW
+
     int i,j;
     float dct = 0;
-    int yb = blockIdx.y * BLOCK_SIZE;
-    int xb = blockIdx.x * BLOCK_SIZE;
+    int yb = threads.group_index().y * BLOCK_SIZE;
+    int xb = threads.group_index().x * BLOCK_SIZE;
 
     /* Get the appropriate quantization table, by offset into quanttbl_gpu. */
     float *quant = &quanttbl_gpu[quant_offset << 6];
@@ -39,23 +44,23 @@ __global__ void dct_quantize( uint8_t *inn_data, int16_t *out_data, uint32_t pad
     __shared__ float tmp_block[BLOCK_SIZE][BLOCK_SIZE];
 
     /* Get pixel from global memory and put it in shared memory */
-    tmp_block[threadIdx.y][threadIdx.x] = inn_data[(yb+threadIdx.y)*width+(xb+threadIdx.x)];
+    tmp_block[threads.thread_index().y][threads.thread_index().x] = inn_data[(yb+threads.thread_index().y)*width+(xb+threads.thread_index().x)];
 
     /* Sync all threads, and kick off the 8x8 blocks */
-    __syncthreads();
+    threads.sync();
 
     for( i = 0; i < BLOCK_SIZE; i++ ) {
         for( j = 0; j < BLOCK_SIZE; j++ ) {
-          dct += (tmp_block[i][j]-128.0f) * COSUV(threadIdx.x,threadIdx.y,i,j);
+          dct += (tmp_block[i][j]-128.0f) * COSUV(threads.thread_index().x,threads.thread_index().y,i,j);
         }
     }
 
-    float a1 = !(threadIdx.y) ? M_SQRT1_2 : 1.0f;
-    float a2 = !(threadIdx.x) ? M_SQRT1_2 : 1.0f;
+    float a1 = !(threads.thread_index().y) ? M_SQRT1_2 : 1.0f;
+    float a2 = !(threads.thread_index().x) ? M_SQRT1_2 : 1.0f;
 
     dct *= a1*a2/4.0f;
 
-    out_data[(yb+threadIdx.x)*padwidth+(xb+threadIdx.y)] = (int16_t)(floor(0.5f + dct / (quant[threadIdx.x*BLOCK_SIZE+threadIdx.y])));
+    out_data[(yb+threads.thread_index().x)*padwidth+(xb+threads.thread_index().y)] = (int16_t)(floor(0.5f + dct / (quant[threads.thread_index().x*BLOCK_SIZE+threads.thread_index().y])));
 }
 
 
