@@ -95,9 +95,18 @@ __host__ void gpu_init()
 __host__ void gpu_dct_quantize(yuv_t *image, dct_t *out)
 {
   /* Copy input to the device */
+#if 0
   memcpy(Yinn, image->Y, y_comp_size);
   memcpy(Uinn, image->U, uv_comp_size);
   memcpy(Vinn, image->V, uv_comp_size);
+#else
+  memcpy(Yinn, image->Y, y_comp_size);
+  cudaStreamAttachMemAsync(NULL, Yinn, 0, cudaMemAttachGlobal);
+  memcpy(Uinn, image->U, uv_comp_size);
+  cudaStreamAttachMemAsync(NULL, Uinn, 0, cudaMemAttachGlobal);
+  memcpy(Vinn, image->V, uv_comp_size);
+  cudaStreamAttachMemAsync(NULL, Vinn, 0, cudaMemAttachGlobal);
+#endif
 
   /* Init blocks and threads for GPU,
    * One grid for Y, and one for U and V
@@ -126,6 +135,10 @@ __host__ void gpu_dct_quantize(yuv_t *image, dct_t *out)
 
   /* Launch dct_quantize kernel with UV (V) grid size */
   dct_quantize <<<block_grid_UV, thread_grid>>> ( Vinn, Vdst, vpw, uv_width, V_QUANT );
+
+  cudaStreamAttachMemAsync(NULL, Ydst, 0, cudaMemAttachHost);
+  cudaStreamAttachMemAsync(NULL, Udst, 0, cudaMemAttachHost);
+  cudaStreamAttachMemAsync(NULL, Vdst, 0, cudaMemAttachHost);
 
   cudaDeviceSynchronize();
 
