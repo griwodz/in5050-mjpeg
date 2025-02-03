@@ -7,6 +7,9 @@
 #include "cosv.h"
 #include "quant_table.h"
 
+#define BLOCK_SIZE_LOG 3
+#define BLOCK_SIZE 8
+
 /* Global variables, for less redundancy processing */
 uint32_t uv_width;
 uint32_t uv_height;
@@ -23,6 +26,115 @@ uint8_t *Vinn;
 
 static cudaStream_t stream[3];
 
+__global__ void dct_quantize( uint8_t *inn_data, int16_t *out_data, uint32_t padwidth, uint16_t width, uint32_t quant_offset );
+
+/* Init function is called from main in mjpeg_encoder.c. When doing this, we can reduce
+ * some overhead, and not have to start ut and initialize the GPU everytime we call dct.
+ *
+ * Inti sets up grids and thread grids for the YUV format.
+ * We also set up necessary variables for processing the frames
+ * Init is done by the host!
+ */
+__host__ void gpu_init()
+{
+    uv_width	    = (width / 2);
+    uv_height	    = (height / 2);
+
+    /* Multiply by 2, since ipupt is uint8_t and output is int16_t */
+    uv_out_size	    = (uv_comp_size * 2);
+    y_out_size	    = (y_comp_size  * 2);
+
+    /* Do the memory! */
+    /* Allocate memory on the device for the input */
+    cudaMallocManaged((void **) &Yinn, y_comp_size);
+    cudaMallocManaged((void **) &Uinn, uv_comp_size);
+    cudaMallocManaged((void **) &Vinn, uv_comp_size);
+
+    /* Allocate memory on the device for the output */
+    cudaMallocManaged((void **) &Ydst, y_out_size);
+    cudaMallocManaged((void **) &Udst, uv_out_size);
+    cudaMallocManaged((void **) &Vdst, uv_out_size);
+
+    for( int i=0; i<3; i++ )
+    {
+        cudaError_t err = cudaStreamCreate( &stream[i] );
+        if( err != cudaSuccess )
+        {
+            std::cerr << "Failed to create CUDA stream " << i << " - terminating" << std::endl;
+            exit( EXIT_FAILURE );
+        }
+    }
+}
+
+/* Clean up! ;) */
+__host__ void gpu_cleanup()
+{
+    for( int i=0; i<3; i++ )
+        cudaStreamDestroy( stream[i] );
+
+    cudaFree(Yinn);
+    cudaFree(Uinn);
+    cudaFree(Vinn);
+
+    cudaFree(Ydst);
+    cudaFree(Udst);
+    cudaFree(Vdst);
+}
+
+
+/* Host code. This is the function called from mjpeg_encoder.c.
+ * Handles all copying, the binding of texture memory and calls
+ * the dct_quantize function. It also handles the output data.
+ */
+__host__ void gpu_dct_quantize(yuv_t *image, dct_t *out)
+{
+    /* Copy input to the device */
+    memcpy(Yinn, image->Y, y_comp_size);
+    cudaStreamAttachMemAsync(stream[0], Yinn, 0, cudaMemAttachGlobal);
+    memcpy(Uinn, image->U, uv_comp_size);
+    cudaStreamAttachMemAsync(stream[1], Uinn, 0, cudaMemAttachGlobal);
+    memcpy(Vinn, image->V, uv_comp_size);
+    cudaStreamAttachMemAsync(stream[2], Vinn, 0, cudaMemAttachGlobal);
+
+    /* Init blocks and threads for GPU,
+     * One grid for Y, and one for U and V
+     */
+    dim3 block_grid_Y;
+    dim3 block_grid_UV;
+    dim3 thread_grid;
+
+    /* Block grid: NUM_8x8BLOCKSxNUM_8x8BLOCKS Y component */
+    block_grid_Y.y    = height >> BLOCK_SIZE_LOG;
+    block_grid_Y.x    = width >> BLOCK_SIZE_LOG;
+
+    /* Block grid: NUM_8x8BLOCKSxNUM_8x8BLOCKS U and V component */
+    block_grid_UV.y   = uph >> BLOCK_SIZE_LOG;
+    block_grid_UV.x   = upw >> BLOCK_SIZE_LOG;
+
+    /* Grid size: 8x8 pixels */
+    thread_grid.x	    = BLOCK_SIZE;
+    thread_grid.y	    = BLOCK_SIZE;
+
+    /* Launch dct_quantize kernel with Y grid size */
+    dct_quantize <<<block_grid_Y,  thread_grid, 0, stream[0]>>> ( Yinn, Ydst, ypw, width, Y_QUANT );
+
+    /* Launch dct_quantize kernel with UV (U) grid size */
+    dct_quantize <<<block_grid_UV, thread_grid, 0, stream[1]>>> ( Uinn ,Udst, upw, uv_width, U_QUANT );
+
+    /* Launch dct_quantize kernel with UV (V) grid size */
+    dct_quantize <<<block_grid_UV, thread_grid, 0, stream[2]>>> ( Vinn, Vdst, vpw, uv_width, V_QUANT );
+
+    cudaStreamAttachMemAsync(stream[0], Ydst, 0, cudaMemAttachHost);
+    cudaStreamAttachMemAsync(stream[1], Udst, 0, cudaMemAttachHost);
+    cudaStreamAttachMemAsync(stream[2], Vdst, 0, cudaMemAttachHost);
+
+    cudaDeviceSynchronize();
+
+    /* Copy back to the host from the device memory  */
+    memcpy(out->Ydct, Ydst, y_out_size);
+    memcpy(out->Udct, Udst, uv_out_size);
+    memcpy(out->Vdct, Vdst, uv_out_size);
+}
 
 /* The DCT is performed on the device. Use the DCT algorithm from precode.
  * ONE thread will work on ONE pixel.
@@ -60,111 +172,3 @@ __global__ void dct_quantize( uint8_t *inn_data, int16_t *out_data, uint32_t pad
     out_data[(yb+threadIdx.x)*padwidth+(xb+threadIdx.y)] = (int16_t)(floor(0.5f + dct / (quant[threadIdx.x*BLOCK_SIZE+threadIdx.y])));
 }
 
-
-/* Init function is called from main in mjpeg_encoder.c. When doing this, we can reduce
- * some overhead, and not have to start ut and initialize the GPU everytime we call dct.
- *
- * Inti sets up grids and thread grids for the YUV format.
- * We also set up necessary variables for processing the frames
- * Init is done by the host!
- */
-__host__ void gpu_init()
-{
-  uv_width	    = (width / 2);
-  uv_height	    = (height / 2);
-
-  /* Multiply by 2, since ipupt is uint8_t and output is int16_t */
-  uv_out_size	    = (uv_comp_size * 2);
-  y_out_size	    = (y_comp_size  * 2);
-
-  /* Do the memory! */
-  /* Allocate memory on the device for the input */
-  cudaMallocManaged((void **) &Yinn, y_comp_size);
-  cudaMallocManaged((void **) &Uinn, uv_comp_size);
-  cudaMallocManaged((void **) &Vinn, uv_comp_size);
-
-  /* Allocate memory on the device for the output */
-  cudaMallocManaged((void **) &Ydst, y_out_size);
-  cudaMallocManaged((void **) &Udst, uv_out_size);
-  cudaMallocManaged((void **) &Vdst, uv_out_size);
-
-  for( int i=0; i<3; i++ )
-  {
-    cudaError_t err = cudaStreamCreate( &stream[i] );
-    if( err != cudaSuccess )
-    {
-        std::cerr << "Failed to create CUDA stream " << i << " - terminating" << std::endl;
-        exit( EXIT_FAILURE );
-    }
-  }
-}
-
-
-/* Host code. This is the function called from mjpeg_encoder.c.
- * Handles all copying, the binding of texture memory and calls
- * the dct_quantize function. It also handles the output data.
- */
-__host__ void gpu_dct_quantize(yuv_t *image, dct_t *out)
-{
-  /* Copy input to the device */
-  memcpy(Yinn, image->Y, y_comp_size);
-  cudaStreamAttachMemAsync(stream[0], Yinn, 0, cudaMemAttachGlobal);
-  memcpy(Uinn, image->U, uv_comp_size);
-  cudaStreamAttachMemAsync(stream[1], Uinn, 0, cudaMemAttachGlobal);
-  memcpy(Vinn, image->V, uv_comp_size);
-  cudaStreamAttachMemAsync(stream[2], Vinn, 0, cudaMemAttachGlobal);
-
-  /* Init blocks and threads for GPU,
-   * One grid for Y, and one for U and V
-   */
-  dim3 block_grid_Y;
-  dim3 block_grid_UV;
-  dim3 thread_grid;
-
-  /* Block grid: NUM_8x8BLOCKSxNUM_8x8BLOCKS Y component */
-  block_grid_Y.y    = height >> BLOCK_SIZE_LOG;
-  block_grid_Y.x    = width >> BLOCK_SIZE_LOG;
-
-  /* Block grid: NUM_8x8BLOCKSxNUM_8x8BLOCKS U and V component */
-  block_grid_UV.y   = uph >> BLOCK_SIZE_LOG;
-  block_grid_UV.x   = upw >> BLOCK_SIZE_LOG;
-
-  /* Grid size: 8x8 pixels */
-  thread_grid.x	    = BLOCK_SIZE;
-  thread_grid.y	    = BLOCK_SIZE;
-
-  /* Launch dct_quantize kernel with Y grid size */
-  dct_quantize <<<block_grid_Y,  thread_grid, 0, stream[0]>>> ( Yinn, Ydst, ypw, width, Y_QUANT );
-
-  /* Launch dct_quantize kernel with UV (U) grid size */
-  dct_quantize <<<block_grid_UV, thread_grid, 0, stream[1]>>> ( Uinn ,Udst, upw, uv_width, U_QUANT );
-
-  /* Launch dct_quantize kernel with UV (V) grid size */
-  dct_quantize <<<block_grid_UV, thread_grid, 0, stream[2]>>> ( Vinn, Vdst, vpw, uv_width, V_QUANT );
-
-  cudaStreamAttachMemAsync(stream[0], Ydst, 0, cudaMemAttachHost);
-  cudaStreamAttachMemAsync(stream[1], Udst, 0, cudaMemAttachHost);
-  cudaStreamAttachMemAsync(stream[2], Vdst, 0, cudaMemAttachHost);
-
-  cudaDeviceSynchronize();
-
-  /* Copy back to the host from the device memory  */
-  memcpy(out->Ydct, Ydst, y_out_size);
-  memcpy(out->Udct, Udst, uv_out_size);
-  memcpy(out->Vdct, Vdst, uv_out_size);
-}
-
-/* Clean up! ;) */
-__host__ void gpu_cleanup()
-{
-  for( int i=0; i<3; i++ )
-    cudaStreamDestroy( stream[i] );
-
-  cudaFree(Yinn);
-  cudaFree(Uinn);
-  cudaFree(Vinn);
-
-  cudaFree(Ydst);
-  cudaFree(Udst);
-  cudaFree(Vdst);
-}
