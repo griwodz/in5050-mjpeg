@@ -78,7 +78,7 @@ static yuv_t* read_yuv(FILE *file, yuv_t *image)
     return image;
 }
 
-static void encode(yuv_t *image, dct_t *out)
+static void encode( yuv_t *image, dct_t *out )
 {
   /* We have this nice GPU up and running! Let's do some DCT! */
   gpu_dct_quantize(image, out);
@@ -204,15 +204,14 @@ int main(int argc, char **argv)
     /* Parse input files */
     while (!feof(infile))
     {
-	     image = read_yuv(infile, image);
+        image = read_yuv(infile, image);
 
-       if (!image)
-       {
+        if (!image)
+        {
+            break;
+        }
 
-         break;
-       }
-
-	      printf("Encoding frame %d, ", numframes);
+	    printf("Encoding frame %d, ", numframes);
         encode(image, out);
         printf("Done!\n");
 
@@ -220,7 +219,7 @@ int main(int argc, char **argv)
 
         if (limit_numframes && numframes >= limit_numframes)
         {
-          break;
+            break;
         }
     }
 
@@ -233,3 +232,4 @@ int main(int argc, char **argv)
     // exit (EXIT_SUCCESS);
     return 0;
 }
+
